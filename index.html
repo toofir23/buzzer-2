@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Buzzer 🎯</title>
+<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0a0f; --surface: #13131f; --surface2: #1c1c2e;
+    --gold: #f5c542; --red: #ff4444; --green: #00e676; --text: #f0f0ff; --muted: #6b6b8a;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Cairo',sans-serif; min-height:100vh; }
+  .screen { display:none; min-height:100vh; position:relative; z-index:1; }
+  .screen.active { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:20px; }
+  #host { justify-content:flex-start; padding-top:20px; gap:16px; }
+  .logo { font-size:64px; text-align:center; animation:pulse 2.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{filter:drop-shadow(0 0 20px #f5c54266)} 50%{filter:drop-shadow(0 0 50px #f5c542cc)} }
+  h1.title { font-size:clamp(28px,6vw,48px); font-weight:900; background:linear-gradient(135deg,#f5c542,#ff9800,#f5c542); -webkit-background-clip:text; -webkit-text-fill-color:transparent; text-align:center; }
+  .subtitle { color:var(--muted); font-size:15px; text-align:center; }
+  .card { background:var(--surface); border:1px solid rgba(245,197,66,0.15); border-radius:20px; padding:28px; width:100%; max-width:380px; display:flex; flex-direction:column; gap:14px; }
+  .card h2 { font-size:17px; font-weight:700; color:var(--gold); }
+  input { background:var(--surface2); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:14px 16px; color:var(--text); font-family:'Cairo',sans-serif; font-size:15px; width:100%; outline:none; transition:border-color 0.2s; }
+  input:focus { border-color:var(--gold); }
+  input::placeholder { color:var(--muted); }
+  .btn { border:none; border-radius:14px; padding:15px 24px; font-family:'Cairo',sans-serif; font-size:16px; font-weight:700; cursor:pointer; transition:all 0.2s; width:100%; }
+  .btn-gold { background:linear-gradient(135deg,#f5c542,#e0a800); color:#0a0a0f; }
+  .btn-gold:hover { transform:translateY(-2px); box-shadow:0 8px 24px #f5c54244; }
+  .btn-outline { background:transparent; border:1px solid rgba(255,255,255,0.15); color:var(--text); }
+  .host-header { width:100%; max-width:700px; display:flex; align-items:center; justify-content:space-between; background:var(--surface); border-radius:16px; padding:14px 20px; border:1px solid rgba(245,197,66,0.2); }
+  .room-badge { display:flex; align-items:center; gap:10px; font-size:14px; color:var(--muted); }
+  .room-code { font-size:22px; font-weight:900; color:var(--gold); letter-spacing:3px; }
+  .online-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:blink 1.5s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .winner-box { width:100%; max-width:700px; border-radius:20px; padding:28px; text-align:center; border:2px solid transparent; transition:all 0.4s; background:var(--surface); }
+  .winner-box.has-winner { border-color:var(--gold); background:linear-gradient(135deg,#1a1500,#13131f); box-shadow:0 0 60px #f5c54222; }
+  .winner-label { font-size:13px; color:var(--muted); margin-bottom:8px; letter-spacing:2px; }
+  .winner-name { font-size:clamp(32px,8vw,56px); font-weight:900; color:var(--gold); text-shadow:0 0 40px #f5c54266; animation:winner-in 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+  @keyframes winner-in { from{transform:scale(0.5);opacity:0} to{transform:scale(1);opacity:1} }
+  .winner-time { font-size:13px; color:var(--muted); margin-top:8px; }
+  .waiting-text { font-size:18px; color:var(--muted); font-weight:600; }
+  .players-section { width:100%; max-width:700px; }
+  .section-title { font-size:13px; color:var(--muted); letter-spacing:2px; margin-bottom:10px; }
+  .players-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+  .player-chip { background:var(--surface); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:10px 14px; display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; transition:all 0.3s; }
+  .player-chip.buzzed { border-color:var(--gold); color:var(--gold); }
+  .player-avatar { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:900; flex-shrink:0; }
+  .reset-btn { width:100%; max-width:700px; background:linear-gradient(135deg,#ff4444,#cc0000); color:#fff; border:none; border-radius:14px; padding:16px; font-family:'Cairo',sans-serif; font-size:16px; font-weight:700; cursor:pointer; transition:all 0.2s; }
+  .share-section { width:100%; max-width:700px; background:var(--surface); border-radius:16px; padding:16px 20px; border:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; gap:14px; }
+  .share-url { flex:1; font-size:13px; color:var(--muted); word-break:break-all; }
+  .copy-btn { background:var(--surface2); border:1px solid rgba(255,255,255,0.1); color:var(--text); border-radius:10px; padding:8px 16px; font-family:'Cairo',sans-serif; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .copy-btn.copied { border-color:var(--green); color:var(--green); }
+  #player { gap:24px; }
+  .player-name-display { font-size:18px; font-weight:700; color:var(--muted); }
+  .player-name-display span { color:var(--text); }
+  .buzzer-wrap { display:flex; flex-direction:column; align-items:center; gap:20px; width:100%; }
+  .buzzer-btn { width:220px; height:220px; border-radius:50%; border:none; cursor:pointer; background:radial-gradient(circle at 35% 35%,#ff6b6b,#cc0000,#880000); box-shadow:0 0 0 8px rgba(255,68,68,0.15),0 0 0 16px rgba(255,68,68,0.08),0 20px 60px rgba(255,68,68,0.5); font-family:'Cairo',sans-serif; font-size:22px; font-weight:900; color:#fff; transition:all 0.15s; animation:buzzer-idle 3s ease-in-out infinite; }
+  @keyframes buzzer-idle { 0%,100%{box-shadow:0 0 0 8px rgba(255,68,68,0.15),0 0 0 16px rgba(255,68,68,0.08),0 20px 60px rgba(255,68,68,0.4)} 50%{box-shadow:0 0 0 12px rgba(255,68,68,0.2),0 0 0 24px rgba(255,68,68,0.1),0 30px 80px rgba(255,68,68,0.6)} }
+  .buzzer-btn:active:not(:disabled) { transform:scale(0.94); }
+  .buzzer-btn:disabled { background:radial-gradient(circle at 35% 35%,#555,#333,#222); box-shadow:none; cursor:not-allowed; animation:none; }
+  .buzzer-btn.winner-flash { animation:winner-flash 0.6s ease 3; }
+  @keyframes winner-flash { 0%,100%{background:radial-gradient(circle at 35% 35%,#ff6b6b,#cc0000,#880000)} 50%{background:radial-gradient(circle at 35% 35%,#fff176,#f5c542,#e0a800)} }
+  .status-msg { font-size:16px; font-weight:600; text-align:center; min-height:48px; display:flex; align-items:center; justify-content:center; border-radius:14px; padding:12px 24px; width:100%; max-width:320px; }
+  .status-msg.waiting { color:var(--muted); }
+  .status-msg.you-won { background:#1a150099; border:1px solid var(--gold); color:var(--gold); font-size:20px; font-weight:900; }
+  .status-msg.too-late { background:#1a000099; border:1px solid var(--red); color:var(--red); }
+  .confetti-container { position:fixed; inset:0; pointer-events:none; z-index:999; overflow:hidden; }
+  .confetti-piece { position:absolute; top:-20px; border-radius:2px; animation:confetti-fall linear forwards; }
+  @keyframes confetti-fall { to{transform:translateY(110vh) rotate(720deg);opacity:0} }
+  .no-players { color:var(--muted); font-size:14px; text-align:center; padding:20px; }
+  hr.divider { width:100%; max-width:380px; border:none; border-top:1px solid rgba(255,255,255,0.07); }
+</style>
+</head>
+<body>
+
+<div id="landing" class="screen active">
+  <div class="logo">🎯</div>
+  <h1 class="title">Buzzer Live</h1>
+  <p class="subtitle">Real-time buzzer for your competition</p>
+  <div class="card">
+    <h2>🎤 Are you the Host?</h2>
+    <input id="host-name-input" type="text" placeholder="Competition name (optional)" maxlength="30"/>
+    <button class="btn btn-gold" onclick="createRoom()">Create New Room</button>
+  </div>
+  <hr class="divider"/>
+  <div class="card">
+    <h2>👤 Participant?</h2>
+    <input id="room-code-input" type="text" placeholder="Room code (4 letters)" maxlength="4" style="text-transform:uppercase;text-align:center;font-size:22px;font-weight:900;letter-spacing:6px;"/>
+    <input id="player-name-input" type="text" placeholder="Your name" maxlength="20"/>
+    <button class="btn btn-outline" onclick="joinRoom()">Join Room</button>
+  </div>
+</div>
+
+<div id="host" class="screen">
+  <div class="host-header">
+    <div class="room-badge">
+      <div class="online-dot"></div>
+      <span id="players-count">0 participants</span>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">Room Code</div>
+      <div class="room-code" id="display-room-code">----</div>
+    </div>
+  </div>
+  <div class="share-section">
+    <div class="share-url" id="share-url-text">...</div>
+    <button class="copy-btn" id="copy-btn" onclick="copyLink()">Copy Link</button>
+  </div>
+  <div class="winner-box" id="winner-box">
+    <div class="winner-label">Waiting for participants</div>
+    <div class="waiting-text" id="winner-display">Start the question</div>
+  </div>
+  <button class="reset-btn" onclick="resetBuzzer()">🔄 New Question — Reset</button>
+  <div class="players-section">
+    <div class="section-title">CONNECTED PARTICIPANTS</div>
+    <div class="players-grid" id="players-grid">
+      <div class="no-players">No participants yet</div>
+    </div>
+  </div>
+</div>
+
+<div id="join" class="screen">
+  <div class="logo" style="font-size:48px;">🎯</div>
+  <h1 class="title" style="font-size:28px;">Buzzer Live</h1>
+  <div class="card">
+    <h2>Join the competition</h2>
+    <input id="join-room-code" type="text" placeholder="Room code" maxlength="4" style="text-transform:uppercase;text-align:center;font-size:22px;font-weight:900;letter-spacing:6px;" readonly/>
+    <input id="join-player-name" type="text" placeholder="Your name" maxlength="20"/>
+    <button class="btn btn-gold" onclick="joinFromUrl()">Join Now</button>
+  </div>
+</div>
+
+<div id="player" class="screen">
+  <div class="player-name-display">Welcome, <span id="my-name-display">-</span> 👋</div>
+  <div class="buzzer-wrap">
+    <button class="buzzer-btn" id="buzzer-btn" onclick="pressBuzzer()">BUZZ!</button>
+    <div class="status-msg waiting" id="player-status">Ready — wait for the question</div>
+  </div>
+</div>
+
+<div class="confetti-container" id="confetti-container"></div>
+
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof Ably === 'undefined') {
+    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0a0a0f;color:#f0f0ff;font-family:sans-serif;text-align:center;padding:24px;gap:16px;"><div style="font-size:48px">❌</div><h2 style="color:#ff4444">Failed to load Ably</h2><p style="color:#6b6b8a">Try disabling VPN or ad blocker, or use a different browser.</p></div>`;
+    return;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('room');
+  if (code) {
+    showScreen('join');
+    document.getElementById('join-room-code').value = code.toUpperCase();
+  }
+});
+
+const ABLY_KEY = "PANoPQ.LLPhHg:Gr1eNqCy3X02rl3Wxx3IhGe12PyfbHrZDACFwgJL63U";
+let ably, channel, myName = '', roomCode = '', players = {}, buzzerLocked = false;
+const AVATAR_COLORS = ['#f5c542','#ff6b6b','#48dbfb','#ff9f43','#1dd1a1','#ee5a24','#a29bfe','#fd79a8'];
+
+function genCode() { return Math.random().toString(36).substring(2,6).toUpperCase(); }
+function showScreen(id) { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+function getAvatarColor(name) { let h=0; for(let c of name) h=c.charCodeAt(0)+((h<<5)-h); return AVATAR_COLORS[Math.abs(h)%AVATAR_COLORS.length]; }
+function getInitial(name) { return name.charAt(0).toUpperCase(); }
+
+async function initAbly() {
+  return new Promise((resolve, reject) => {
+    try {
+      ably = new Ably.Realtime({ key: ABLY_KEY, clientId: myName+'_'+Date.now() });
+      const t = setTimeout(() => reject(new Error('Connection timed out — check your internet')), 10000);
+      ably.connection.once('connected', () => { clearTimeout(t); resolve(); });
+      ably.connection.once('failed', (err) => { clearTimeout(t); reject(new Error('Connection failed: '+(err?.reason?.message||'unknown'))); });
+    } catch(e) { reject(new Error('Ably error: '+e.message)); }
+  });
+}
+
+async function createRoom() {
+  const btn = document.querySelector('#landing .btn-gold');
+  btn.textContent = '⏳ Connecting...'; btn.disabled = true;
+  roomCode = genCode(); myName = 'host_'+roomCode;
+  try { await initAbly(); } catch(e) { btn.textContent = 'Create New Room'; btn.disabled = false; alert('❌ '+e.message); return; }
+  channel = ably.channels.get('buzzer_'+roomCode);
+  channel.subscribe('player-join', msg => { players[msg.data.id]={name:msg.data.name,id:msg.data.id,buzzed:false}; updatePlayersUI(); });
+  channel.subscribe('player-leave', msg => { delete players[msg.data.id]; updatePlayersUI(); });
+  channel.subscribe('buzz', msg => {
+    if (buzzerLocked) return;
+    buzzerLocked = true;
+    if(players[msg.data.id]) players[msg.data.id].buzzed = true;
+    showWinner(msg.data.name, msg.data.time);
+    updatePlayersUI();
+    channel.publish('winner', { name:msg.data.name, id:msg.data.id });
+    spawnConfetti();
+  });
+  const url = window.location.href.split('?')[0]+'?room='+roomCode;
+  document.getElementById('share-url-text').textContent = url;
+  document.getElementById('display-room-code').textContent = roomCode;
+  updatePlayersUI(); showScreen('host');
+}
+
+function showWinner(name, time) {
+  const box = document.getElementById('winner-box');
+  box.classList.add('has-winner');
+  box.innerHTML = `<div class="winner-label">🏆 FIRST TO BUZZ</div><div class="winner-name">${name}</div><div class="winner-time">${time||''}</div>`;
+}
+
+function resetBuzzer() {
+  buzzerLocked = false;
+  Object.values(players).forEach(p=>p.buzzed=false);
+  const box = document.getElementById('winner-box');
+  box.classList.remove('has-winner');
+  box.innerHTML = `<div class="winner-label">Waiting for answer</div><div class="waiting-text">Start the question</div>`;
+  updatePlayersUI(); channel.publish('reset', {});
+}
+
+function updatePlayersUI() {
+  const grid = document.getElementById('players-grid');
+  const count = Object.keys(players).length;
+  document.getElementById('players-count').textContent = count+' participants';
+  if (!count) { grid.innerHTML = '<div class="no-players">Waiting for participants...</div>'; return; }
+  grid.innerHTML = Object.values(players).map(p=>`
+    <div class="player-chip ${p.buzzed?'buzzed':''}">
+      <div class="player-avatar" style="background:${getAvatarColor(p.name)}22;color:${getAvatarColor(p.name)};border:2px solid ${getAvatarColor(p.name)}55">${getInitial(p.name)}</div>
+      <span>${p.name}</span>${p.buzzed?'⚡':''}
+    </div>`).join('');
+}
+
+function copyLink() {
+  const url = window.location.href.split('?')[0]+'?room='+roomCode;
+  navigator.clipboard.writeText(url);
+  const btn = document.getElementById('copy-btn');
+  btn.textContent='✓ Copied!'; btn.classList.add('copied');
+  setTimeout(()=>{btn.textContent='Copy Link';btn.classList.remove('copied');},2000);
+}
+
+async function joinRoom() {
+  const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+  const name = document.getElementById('player-name-input').value.trim();
+  if (!code||code.length!==4) { alert('Enter the 4-letter room code'); return; }
+  if (!name) { alert('Enter your name'); return; }
+  await setupPlayer(code, name);
+}
+
+async function joinFromUrl() {
+  const code = document.getElementById('join-room-code').value.trim().toUpperCase();
+  const name = document.getElementById('join-player-name').value.trim();
+  if (!name) { alert('Enter your name'); return; }
+  await setupPlayer(code, name);
+}
+
+async function setupPlayer(code, name) {
+  roomCode = code; myName = name;
+  const myId = name+'_'+Date.now();
+  const btn = document.querySelector('.screen.active .btn-gold');
+  if(btn){btn.textContent='⏳ Connecting...';btn.disabled=true;}
+  try { await initAbly(); } catch(e) { if(btn){btn.textContent='Join Now';btn.disabled=false;} alert('❌ '+e.message); return; }
+  channel = ably.channels.get('buzzer_'+roomCode);
+  channel.publish('player-join', {name, id:myId});
+  channel.subscribe('winner', msg => {
+    const b=document.getElementById('buzzer-btn'), s=document.getElementById('player-status');
+    b.disabled=true;
+    if(msg.data.name===name){s.className='status-msg you-won';s.textContent='🏆 You are first! Answer now!';b.classList.add('winner-flash');}
+    else{s.className='status-msg too-late';s.textContent=`⚡ ${msg.data.name} was faster!`;}
+  });
+  channel.subscribe('reset', ()=>{
+    const b=document.getElementById('buzzer-btn'),s=document.getElementById('player-status');
+    b.disabled=false;b.classList.remove('winner-flash');
+    s.className='status-msg waiting';s.textContent='Ready — wait for the question';
+  });
+  window.addEventListener('beforeunload',()=>channel.publish('player-leave',{id:myId}));
+  document.getElementById('my-name-display').textContent=name;
+  showScreen('player');
+}
+
+function pressBuzzer() {
+  const btn=document.getElementById('buzzer-btn'),status=document.getElementById('player-status');
+  if(btn.disabled)return;
+  const timeStr=new Date().toLocaleTimeString();
+  channel.publish('buzz',{name:myName,id:myName+'_player',time:timeStr});
+  btn.disabled=true;status.className='status-msg waiting';status.textContent='Buzzed! Waiting for result...';
+}
+
+function spawnConfetti() {
+  const container=document.getElementById('confetti-container');
+  const colors=['#f5c542','#ff6b6b','#48dbfb','#ff9f43','#1dd1a1','#a29bfe','#fd79a8','#fff'];
+  for(let i=0;i<80;i++){
+    const el=document.createElement('div');
+    el.className='confetti-piece';
+    el.style.cssText=`left:${Math.random()*100}%;background:${colors[Math.floor(Math.random()*colors.length)]};width:${6+Math.random()*10}px;height:${6+Math.random()*10}px;border-radius:${Math.random()>.5?'50%':'2px'};animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()*.5}s;`;
+    container.appendChild(el);setTimeout(()=>el.remove(),3500);
+  }
+}
+</script>
+</body>
+</html>
